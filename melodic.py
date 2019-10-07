@@ -21,25 +21,50 @@ windchimes = [
     'samples/n_G4.mp3'
 ]
 
+piano_samples = [
+    'samples/piano_C4.mp3',
+    'samples/piano_C5.mp3',
+    'samples/piano_D5.mp3',
+    'samples/piano_E5.mp3',
+    'samples/piano_G4.mp3'
+]
+
 @app.route("/")        # Standard Flask endpoint
 def hello_world():
     return "Hello, World!"
 
-@webhook.hook()        # Defines a handler for the 'push' event
+@webhook.hook(event_type='push')        # Defines a handler for the 'push' event
 def on_push(data):
     print("Got push webhook call")
+    play_windchime()
+    #print("Got push with: {0}".format(data))
+
+@webhook.hook(event_type='commit_comment')
+def on_commit_comment(data):
+    print("Got commit comment")
+    play_piano()
+
+@webhook.hook(event_type='pull_request_review_comment')
+def on_pull_request_review_comment(data):
+    print("Got PR review comment")
+    play_piano()
+
+
+def play_windchime():
+    play_sound(windchimes)
+
+def play_piano():
+    play_sound(piano_samples)
+
+def play_sound(sample_list):
     try:
-        play_sound()
+        with AudiofileToWavStream(random.choice(sample_list)) as wavstream:
+            sample = StreamingSample(wavstream, wavstream.name)
+            audio_out.play_sample(sample)
     except:
         e = sys.exc_info()[0]
         print(str(e))
         pass
-    #print("Got push with: {0}".format(data))
-
-def play_sound():
-    with AudiofileToWavStream(random.choice(windchimes)) as wavstream:
-        sample = StreamingSample(wavstream, wavstream.name)
-        audio_out.play_sample(sample)
 
 from pynput import mouse
 
@@ -54,7 +79,7 @@ def on_click(x, y, button, pressed):
         (x, y)))
     if pressed:
         try:
-            play_sound()
+            play_windchime()
         except:
             e = sys.exc_info()[0]
             print(str(e))
