@@ -10,15 +10,46 @@ import java.time.format.DateTimeFormatter;
 
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-Random rand = new Random(System.currentTimeMillis());
+Random rand;
 SoundFile[] windchimes;
 SoundFile[] pianoSamples;
-ConcurrentLinkedQueue<Event> eventQueue = new ConcurrentLinkedQueue();
-TimeAgo timeAgo = new TimeAgo();
+ConcurrentLinkedQueue<Event> eventQueue;
+HashMap<String, PImage> avatarImageCache;
+TimeAgo timeAgo;
+
+
+float spring = 0.05;
+float gravity = 0.03;
+float friction = -0.9;
+final int EVENT_DIAMETER = 150; 
 
 void setup() {
-  size(800, 400);
-  //App.bootstrap(new String[]{});
+  fullScreen();
+  //size(800, 800);
+  surface.setTitle("Melodic SDLC");
+  surface.setResizable(true);
+  
+  rand = new Random(System.currentTimeMillis());
+  eventQueue = new ConcurrentLinkedQueue<Event>();
+  avatarImageCache = new HashMap<String, PImage>();
+  timeAgo = new TimeAgo();
+  
+  pianoSamples = new SoundFile[]{
+    new SoundFile(this, "piano_C4.mp3")//,
+    //new SoundFile(this, "piano_C5.mp3"),
+    //new SoundFile(this, "piano_D5.mp3"),
+    //new SoundFile(this, "piano_E5.mp3"),
+    //new SoundFile(this, "piano_G4.mp3")
+  };
+  windchimes = new SoundFile[]{
+    new SoundFile(this, "n_C4.mp3")//,
+    //new SoundFile(this, "n_C5.mp3"),
+    //new SoundFile(this, "n_D4.mp3"),
+    //new SoundFile(this, "n_D5.mp3"),
+    //new SoundFile(this, "n_E5.mp3"),
+    //new SoundFile(this, "n_F4.mp3"),
+    //new SoundFile(this, "n_G4.mp3")
+  };
   On.post("/webhook").json(new ReqHandler(){
     public Object execute(Req req){
       Event event = null;
@@ -36,37 +67,81 @@ void setup() {
       } else {
         event = new Event(EventType.NON_GITHUB_EVENT, null);
       }
-      if (event != null) {
-        eventQueue.add(event);
+      SoundFile file = null;
+      switch(event.eventType){
+        case PUSH:
+          file = windchimes[rand.nextInt(windchimes.length)];
+          break;
+        default:
+          file = pianoSamples[rand.nextInt(pianoSamples.length)];
       }
+      if (file != null) {
+        file.play();
+      }
+      eventQueue.add(event);
       return "";
     }
   });
-  pianoSamples = new SoundFile[]{
-    new SoundFile(this, "piano_C4.mp3"),
-    new SoundFile(this, "piano_C5.mp3"),
-    new SoundFile(this, "piano_D5.mp3"),
-    new SoundFile(this, "piano_E5.mp3"),
-    new SoundFile(this, "piano_G4.mp3")
-  };
-  windchimes = new SoundFile[]{
-    new SoundFile(this, "n_C4.mp3"),
-    new SoundFile(this, "n_C5.mp3"),
-    new SoundFile(this, "n_D4.mp3"),
-    new SoundFile(this, "n_D5.mp3"),
-    new SoundFile(this, "n_E5.mp3"),
-    new SoundFile(this, "n_F4.mp3"),
-    new SoundFile(this, "n_G4.mp3")
-  };
 }
 
 class Event {
   EventType eventType;
   JSONObject data;
   
+  float x, y;
+  int diameter;
+  float vx = 0;
+  float vy = 0;
+  
   public Event(EventType eventType, JSONObject data) {
     this.eventType = eventType;
     this.data = data;
+    this.x = rand.nextInt(width);
+    this.y = 0;
+    this.diameter = EVENT_DIAMETER;
+    this.vx = rand.nextFloat() - 0.5f;
+  }
+  
+  void collide(int id, Event[] others) {
+    for (int i = id + 1; i < others.length; i++) {
+      float dx = others[i].x - x;
+      float dy = others[i].y - y;
+      float distance = sqrt(dx*dx + dy*dy);
+      float minDist = others[i].diameter/2 + diameter/2;
+      if (distance < minDist) { 
+        float angle = atan2(dy, dx);
+        float targetX = x + cos(angle) * minDist;
+        float targetY = y + sin(angle) * minDist;
+        float ax = (targetX - others[i].x) * spring;
+        float ay = (targetY - others[i].y) * spring;
+        vx -= ax;
+        vy -= ay;
+        others[i].vx += ax;
+        others[i].vy += ay;
+      }
+    }   
+  }
+  
+  void move() {
+    vy += gravity;
+    x += vx;
+    y += vy;
+    if (x + diameter/2 > width) {
+      x = width - diameter/2;
+      vx *= friction; 
+    }
+    else if (x - diameter/2 < 0) {
+      x = diameter/2;
+      vx *= friction;
+    }
+    if (y + diameter/2 > height) {
+      y = height - diameter/2;
+      vy *= friction; 
+    } 
+    else if (y - diameter/2 < 0) {
+      y = diameter/2;
+      vy *= friction;
+    }
   }
   
   public String userAvatar() {
@@ -78,6 +153,22 @@ class Event {
       default:
         return "";
     }
+  }
+  
+  public PImage getUserAvatarImage() {
+    String userAvatarUrl = userAvatar();
+    PImage image = null;
+    if (userAvatarUrl != null) {
+      image = avatarImageCache.get(userAvatarUrl);
+      if (image == null) {
+        image = loadImage(userAvatarUrl, "png");
+        avatarImageCache.put(userAvatarUrl, image);
+      }
+    }
+    if (image != null) {
+      image.resize(diameter, diameter);
+    }
+    return image;
   }
   
   public String userLogin() {
@@ -115,12 +206,37 @@ class Event {
         }
         break;
       default:
-        timestampString = null;
     }
     if (timestampString != null) {
       return ZonedDateTime.parse(timestampString, DateTimeFormatter.ISO_ZONED_DATE_TIME);
     }
     return null;
+  }
+  
+  public void display() {
+    //int textSize = 32;
+    //textSize(textSize);
+    //fill(255);
+    //text(userLogin(), 200, 100);
+    //text(repository(), 0, 200+textSize);
+    //text(eventType.toString(), 0, 300+textSize);
+    //if (timestamp() != null) {
+    //  String time = timeAgo.timeAgo(timestamp().toEpochSecond()*1000);
+    //  text(time, 0, 300+textSize*2+10);
+    //}
+    
+    // Image Mask + UserAvatarImage
+    // create mask
+    PGraphics maskImage;
+    maskImage = createGraphics(diameter, diameter);
+    maskImage.beginDraw();
+    maskImage.ellipseMode(CORNER);
+    maskImage.ellipse(0, 0, diameter, diameter); //x,y is relative to the maskImage
+    maskImage.endDraw();
+    
+    PImage img = getUserAvatarImage();
+    img.mask(maskImage); 
+    image(img, x, y, diameter, diameter);
   }
 }
 
@@ -132,44 +248,21 @@ enum EventType {
   NON_GITHUB_EVENT
 }
 
-PImage currentImage = null;
-Event currentEvent = null;
+static int MAX_QUEUE_SIZE = 20;
 
 void draw() {
   background(0);
-  Event newEvent = eventQueue.poll();
-  if(newEvent != null) {
-    currentEvent = newEvent;
-    // Load a soundfile from the /data folder of the sketch and play it back
-    System.out.println(newEvent.eventType);
-    // System.out.println(newEvent.data);
-    SoundFile file = null;
-    switch(newEvent.eventType){
-      case PUSH:
-        file = windchimes[rand.nextInt(windchimes.length)];
-        break;
-      default:
-        file = pianoSamples[rand.nextInt(pianoSamples.length)];
-    }
-    if (file != null) {
-      file.play();
-    }
-    // Load the avatar image
-    currentImage = loadImage(newEvent.userAvatar(), "png");
+  if (eventQueue.size() > MAX_QUEUE_SIZE) {
+    eventQueue.poll(); // Remove to get below queue size
   }
-  if (currentImage != null) {
-    image(currentImage, 0, 0, 200, 200);
-  }
-  if (currentEvent != null) {
-    int textSize = 32;
-    textSize(textSize);
-    fill(255);
-    text(currentEvent.userLogin(), 200, 100);
-    text(currentEvent.repository(), 0, 200+textSize);
-    text(currentEvent.eventType.toString(), 0, 300+textSize);
-    if (currentEvent.timestamp() != null) {
-      String time = timeAgo.timeAgo(currentEvent.timestamp().toEpochSecond()*1000);
-      text(time, 0, 300+textSize*2+10);
+  Event[] eventList = new Event[eventQueue.size()];
+  eventList = eventQueue.toArray(eventList);
+  for (int i = 0; i < eventList.length; i++) {
+    Event event = eventList[i];
+    if (event != null) {
+      event.collide(i, eventList);
+      event.move();
+      event.display();
     }
   }
 }
