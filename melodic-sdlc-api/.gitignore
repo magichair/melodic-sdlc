@@ -21,6 +21,3 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-
-# Processing (P3) code directory
-melodicsdlc/code/*

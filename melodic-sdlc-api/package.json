@@ -1,0 +1,17 @@
+{
+  "name": "melodic-sdlc-api",
+  "version": "1.0.0",
+  "description": "Express and Socket.io backend for melodic-sdlc",
+  "main": "index.js",
+  "scripts": {
+    "start:dev" : "nodemon ./server.js localhost 8080"
+  },
+  "author": "j.ibsen@projectfuse.net",
+  "dependencies": {
+    "express": "^4.17.1",
+    "socket.io": "^2.3.0"
+  },
+  "devDependencies": {
+    "nodemon": "^1.19.3"
+  }
+}
