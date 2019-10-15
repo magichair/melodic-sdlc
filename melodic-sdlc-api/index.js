@@ -1,13 +1,19 @@
 const express = require("express");
 const http = require("http");
 const socketIo = require("socket.io");
+var createHandler = require('github-webhook-handler')
+var handler = createHandler({ path: '/webhook', secret: 'secret' })
 
 //Port from environment variable or default - 4001
 const port = process.env.PORT || 4001;
 
-//Setting up express and adding socketIo middleware
-const app = express();
-const server = http.createServer(app);
+const server = http.createServer(function (req, res) {
+  handler(req, res, function (err) {
+    res.statusCode = 404
+    res.end('no such location')
+  })
+})
+
 const io = socketIo(server);
 
 //Setting up a socket with the namespace "connection" for new sockets
@@ -24,11 +30,15 @@ io.on("connection", socket => {
     socket.on("disconnect", () => console.log("Client disconnected"));
 });
 
-app.use(express.json());
-app.post('/webhook', function(req, res) {
-    io.emit('webhook', {num:100});
-    console.log("webhook");
-    res.json({'hello':'world'});
-})
+handler.on('error', function (err) {
+  console.error('Error:', err.message)
+});
+
+handler.on('*', function (event) {
+  console.log('Received a %s event in repo %s',
+      event.event,
+      event.payload.repository.full_name);
+  io.emit('webhook', event);
+});
 
 server.listen(port, () => console.log(`Listening on port ${port}`));

@@ -4,11 +4,11 @@
   "description": "Express and Socket.io backend for melodic-sdlc",
   "main": "index.js",
   "scripts": {
-    "start:dev" : "nodemon ./server.js localhost 8080"
+    "start:dev": "nodemon ./server.js localhost 8080"
   },
   "author": "j.ibsen@projectfuse.net",
   "dependencies": {
-    "express": "^4.17.1",
+    "github-webhook-handler": "^1.0.0",
     "socket.io": "^2.3.0"
   },
   "devDependencies": {
